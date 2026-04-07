@@ -33,11 +33,25 @@ export async function POST(
       });
     }
 
-    // Initiate new connection using the canonical APP_URL
+    // Debug logging for environment (Don't log the actual key!)
+    console.log(`[API] Connecting ${platform} for user ${user.id}`);
+    console.log(`[API] APP_URL: ${APP_URL}`);
+    console.log(`[API] COMPOSIO_API_KEY exists: ${!!process.env.COMPOSIO_API_KEY}`);
+
+    // Failsafe: if APP_URL is localhost but we're on production, 
+    // try to infer from request URL
+    let baseRedirectUrl = `${APP_URL}/settings`;
+    if (APP_URL.includes("localhost") && !request.url.includes("localhost")) {
+      const origin = new URL(request.url).origin;
+      console.warn(`[API] APP_URL looks local but request is remote. Using inferred origin: ${origin}`);
+      baseRedirectUrl = `${origin}/settings`;
+    }
+
+    // Initiate new connection using the canonical baseRedirectUrl
     const { redirectUrl, connectionId } = await initiateConnection(
       platform, 
       user.id, 
-      `${APP_URL}/settings`
+      baseRedirectUrl
     );
 
     console.log(`[API] Connection initiated: ${connectionId}, Redirect: ${redirectUrl}`);
@@ -67,7 +81,9 @@ export async function POST(
       platform,
     });
   } catch (error: any) {
-    console.error(`[API] EXCEPTION while connecting ${platform}:`, error);
+    console.error(`[API] CRITICAL FAILURE while connecting ${platform}:`, error);
+    console.error(`[API] Error Message: ${error.message}`);
+    console.error(`[API] Error Stack: ${error.stack}`);
     
     // Log more metadata for Threads failure
     if (platform === "threads") {
