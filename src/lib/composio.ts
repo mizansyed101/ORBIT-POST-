@@ -1,55 +1,56 @@
-import { Composio } from "composio-core";
 import { COMPOSIO_API_KEY } from "@/lib/env";
-
-// Singleton Composio client
-let client: Composio | null = null;
-
-export function getComposioClient(): Composio {
-  if (!COMPOSIO_API_KEY) {
-    throw new Error("COMPOSIO_API_KEY is not configured");
-  }
-  if (!client) {
-    client = new Composio({ apiKey: COMPOSIO_API_KEY });
-  }
-  return client;
-}
 
 // Map our platform names to Composio app names
 export const COMPOSIO_APP_MAP: Record<string, string> = {
   twitter: "twitter",
-  x: "twitter", // Fallback for the "X" rebrand
+  x: "twitter",
   linkedin: "linkedin",
   instagram: "instagram",
   facebook: "facebook",
-  threads: "threads", // Let's use the first-party slug as default
-  _threads_fallback: "instagram", // Keep it as a potential fallback
+  threads: "threads",
 };
 
 // Map our platform names to Composio tool slugs for posting
 export const COMPOSIO_POST_TOOL_MAP: Record<string, string> = {
   twitter: "TWITTER_CREATION_OF_A_POST",
   linkedin: "LINKEDIN_CREATE_A_LINKEDIN_POST",
-  instagram: "INSTAGRAM_CREATE_MEDIA_CONTAINER", // Base for Instagram/Threads usually
+  instagram: "INSTAGRAM_CREATE_MEDIA_CONTAINER",
   facebook: "FACEBOOK_CREATE_A_PAGE_POST",
-  threads: "THREADS_CREATE_A_THREAD", // Placeholder
+  threads: "THREADS_CREATE_A_THREAD",
 };
 
 /**
+ * Helper to make authenticated requests to Composio REST API
+ */
+async function composioFetch(endpoint: string, options: RequestInit = {}) {
+    if (!COMPOSIO_API_KEY) {
+        throw new Error("COMPOSIO_API_KEY is not configured");
+    }
+
+    const url = `https://backend.composio.dev/api/v1${endpoint}`;
+    const response = await fetch(url, {
+        ...options,
+        headers: {
+            "x-api-key": COMPOSIO_API_KEY,
+            "Content-Type": "application/json",
+            ...options.headers,
+        },
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Composio API Error (${response.status}): ${errorText}`);
+    }
+
+    return response.json();
+}
+
+/**
  * Ensure an integration exists for the given platform.
- * If not, it creates a managed integration automatically.
  */
 async function ensureIntegrationExists(appName: string): Promise<void> {
   try {
-    const appsRes = await fetch("https://backend.composio.dev/api/v1/apps", {
-      headers: { "x-api-key": COMPOSIO_API_KEY }
-    });
-    
-    if (!appsRes.ok) {
-        console.error(`[Composio] Failed to fetch apps: ${appsRes.status}`);
-        return;
-    }
-    
-    const appsData = await appsRes.json();
+    const appsData = await composioFetch("/apps");
     const targetApp = appsData.items?.find((a: any) => a.key === appName);
     
     if (!targetApp) {
@@ -57,28 +58,14 @@ async function ensureIntegrationExists(appName: string): Promise<void> {
         return;
     }
 
-    // List existing integrations (connectors)
-    const integrationsRes = await fetch("https://backend.composio.dev/api/v1/connectors", {
-      headers: { "x-api-key": COMPOSIO_API_KEY }
-    });
-    
-    if (!integrationsRes.ok) {
-        console.error(`[Composio] Failed to fetch connectors: ${integrationsRes.status}`);
-        return;
-    }
-    
-    const integrationsData = await integrationsRes.json();
+    const integrationsData = await composioFetch("/connectors");
     const integrations = integrationsData.items || [];
     
     const exists = integrations.some((i: any) => i.appName === appName);
     if (!exists) {
-        console.log(`[Composio] No integration found for ${appName}. Creating managed integration...`);
-        const createRes = await fetch("https://backend.composio.dev/api/v2/appConnector/createConnector", {
+        console.log(`[Composio] Creating managed integration for ${appName}...`);
+        await composioFetch("/appConnector/createConnector", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "x-api-key": COMPOSIO_API_KEY
-            },
             body: JSON.stringify({
                 app: { uniqueKey: appName },
                 config: {
@@ -87,12 +74,6 @@ async function ensureIntegrationExists(appName: string): Promise<void> {
                 }
             })
         });
-
-        if (createRes.ok) {
-            console.log(`[Composio] Successfully created managed integration for ${appName}`);
-        } else {
-            console.error(`[Composio] Failed to create integration: ${createRes.status}`);
-        }
     }
   } catch (error) {
     console.error(`[Composio] Error in ensureIntegrationExists for ${appName}:`, error);
@@ -101,137 +82,52 @@ async function ensureIntegrationExists(appName: string): Promise<void> {
 
 /**
  * Initiate a connection for a user and platform.
- * Returns an authorization URL for OAuth.
  */
 export async function initiateConnection(
   platform: string,
   userId: string,
   redirectUrl?: string
 ): Promise<{ redirectUrl: string; connectionId: string }> {
-  const composio = getComposioClient();
-  const appName = COMPOSIO_APP_MAP[platform];
-  if (!appName) {
-    throw new Error(`Unsupported platform: ${platform}`);
-  }
-
-  const entity = composio.getEntity(userId);
+  const appName = COMPOSIO_APP_MAP[platform] || platform;
   
-  // Ensure the integration exists before proceeding
+  // Ensure the integration exists
   await ensureIntegrationExists(appName);
   
-  // Potential app slugs for Threads.net (Composio updates these often)
-  const threadsSlugs = ["threads", "threads_net", "threads.net", "instagram_threads"];
+  console.log(`[Composio] Initiating ${platform} (${appName}) for user ${userId}`);
   
   try {
-    console.log(`[Composio] Initiating ${platform} (${appName}) for user ${userId}`);
-    
-    // For threads, we might want to try multiple known slugs if the first one fails
-    if (platform === "threads") {
-      let lastError: any = null;
-      for (const slug of threadsSlugs) {
-        try {
-          console.log(`[Composio] Trying Threads slug: ${slug}`);
-          const connectionRequest = await entity.initiateConnection({ 
-            appName: slug, 
-            redirectUri: redirectUrl, // Try redirectUri first (as suggested by lint)
-            config: {
-              redirectUrl: redirectUrl // Backup if redirectUri is not it
-            }
-          });
-          
-          console.log(`[Composio] Connection initiated successfully with ${slug}:`, JSON.stringify(connectionRequest, null, 2));
-      
-          return {
-            redirectUrl: connectionRequest.redirectUrl || "",
-            connectionId: connectionRequest.connectedAccountId || "",
-          };
-        } catch (e: any) {
-          lastError = e;
-          if (e.message?.includes("Toolkit not found")) {
-            console.warn(`[Composio] Slug '${slug}' not found. Trying next...`);
-            continue;
-          }
-          throw e; // If it's a different error (e.g. auth), stop and throw
-        }
-      }
-      throw lastError; // Re-throw the last error if all slugs failed
-    }
+      const data = await composioFetch(`/entities/${userId}/connect/initiate`, {
+          method: "POST",
+          body: JSON.stringify({
+              appName,
+              redirectUri: redirectUrl,
+          })
+      });
 
-    // Use direct API for initiation to ensure 'initiateData' is passed correctly
-    // This bypasses SDK limitations where a missing mandatory field causes a 400 error.
-    const initiationPayload = {
-      app: { uniqueKey: appName },
-      config: {
-        name: appName,
-        redirectURL: redirectUrl
-      },
-      connection: {
-        entityId: userId,
-        initiateData: {}
-      }
-    };
-
-    const initiationRes = await fetch("https://backend.composio.dev/api/v2/connectedAccounts/initiateConnection", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": COMPOSIO_API_KEY
-      },
-      body: JSON.stringify(initiationPayload)
-    });
-
-    if (!initiationRes.ok) {
-      const errorData = await initiationRes.json();
-      console.error(`[Composio] Backend initiation error:`, JSON.stringify(errorData, null, 2));
-      throw new Error(`Composio initiation failed with status ${initiationRes.status}`);
-    }
-
-    const connectionRequest = await initiationRes.json();
-    console.log(`[Composio] Connection initiated successfully for ${appName}:`, JSON.stringify(connectionRequest, null, 2));
-
-    // Extract URL robustly — backend returns 'redirectUrl'
-    const finalRedirectUrl = connectionRequest.redirectUrl || 
-                            connectionRequest.url || 
-                            connectionRequest.redirect_url || 
-                            "";
-
-    return {
-      redirectUrl: finalRedirectUrl,
-      connectionId: connectionRequest.connectedAccountId || connectionRequest.connectionId || "",
-    };
-  } catch (err) {
-    console.error(`[Composio] Final error initiating connection for ${platform}:`, err);
-    throw err;
+      return {
+          redirectUrl: data.redirectUrl,
+          connectionId: data.connectionId || data.connectedAccountId || "",
+      };
+  } catch (error) {
+      console.error(`[Composio] REST API Connection error for ${platform}:`, error);
+      throw error;
   }
 }
 
 /**
  * Check if a specific platform is connected for a user.
- * Uses Entity.getConnections() to check for an active connection.
  */
 export async function isConnected(
   platform: string,
   userId: string
 ): Promise<boolean> {
   try {
-    const composio = getComposioClient();
-    const entity = composio.getEntity(userId);
-    const connections = await entity.getConnections();
-    let appName = COMPOSIO_APP_MAP[platform];
-
-    console.log(`[Composio] Checking connections for ${platform} (${appName})`);
+    const appName = COMPOSIO_APP_MAP[platform] || platform;
+    const data = await composioFetch(`/entities/${userId}/connections`);
     
-    const activeAppNames = connections
+    const activeAppNames = (data.items || [])
       .filter((c: any) => c.status === "ACTIVE")
       .map((c: any) => c.appName);
-
-    console.log(`[Composio] Active connections:`, activeAppNames.join(', '));
-
-    // Special check for Threads which might use multiple slugs
-    if (platform === "threads") {
-      const threadsSlugs = ["threads", "threads_net", "threads.net", "instagram_threads"];
-      return threadsSlugs.some(slug => activeAppNames.includes(slug));
-    }
 
     return activeAppNames.includes(appName);
   } catch (err) {
@@ -242,7 +138,6 @@ export async function isConnected(
 
 /**
  * Execute a post on a social platform via Composio.
- * Uses Entity.execute() for action execution.
  */
 export async function executePost(
   platform: string,
@@ -250,31 +145,26 @@ export async function executePost(
   content: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const composio = getComposioClient();
-    const entity = composio.getEntity(userId);
     const actionName = COMPOSIO_POST_TOOL_MAP[platform];
-
     if (!actionName) {
       return { success: false, error: `Unsupported platform: ${platform}` };
     }
 
-    const result = await entity.execute({
-      actionName,
-      params: { text: content },
+    const result = await composioFetch(`/entities/${userId}/execute`, {
+        method: "POST",
+        body: JSON.stringify({
+            actionName,
+            params: { text: content },
+        })
     });
 
-    // Check the result — Composio's response has `successfull` (their spelling)
-    const isSuccess =
-      (result as Record<string, unknown>)?.successfull ??
-      (result as Record<string, unknown>)?.successful ??
-      false;
+    // Check the result
+    const isSuccess = result.successfull || result.successful || false;
 
     if (!isSuccess) {
       return {
         success: false,
-        error:
-          ((result as Record<string, unknown>)?.error as string) ||
-          "Composio execution failed",
+        error: result.error || "Composio execution failed",
       };
     }
 
@@ -295,35 +185,21 @@ export async function disconnectPlatform(
   userId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const composio = getComposioClient();
-    const entity = composio.getEntity(userId);
-    const connections = await entity.getConnections();
+    const appName = COMPOSIO_APP_MAP[platform] || platform;
+    const connections = await composioFetch(`/entities/${userId}/connections`);
     
-    let appName = COMPOSIO_APP_MAP[platform];
-    const threadsSlugs = ["threads", "threads_net", "threads.net", "instagram_threads"];
+    const targetConnection = (connections.items || []).find(
+      (c: any) => c.appName === appName && c.status === "ACTIVE"
+    );
 
-    // Find the connection for this platform
-    const connection = connections.find((c: any) => {
-      if (platform === "threads") {
-        return threadsSlugs.includes(c.appName) && c.status === "ACTIVE";
-      }
-      return c.appName === appName && c.status === "ACTIVE";
-    });
-
-    if (!connection) {
-      return { success: false, error: "No active connection found for this platform" };
+    if (targetConnection) {
+        await composioFetch(`/connections/${targetConnection.id}/delete`, {
+            method: "DELETE"
+        });
     }
-
-    console.log(`[Composio] Disconnecting ${platform} (ID: ${(connection as any).id || (connection as any).connectedAccountId})`);
-    
-    // Use the confirmed SDK method which expects an object
-    await (composio as any).connectedAccounts.delete({ 
-      connectedAccountId: (connection as any).id || (connection as any).connectedAccountId 
-    });
 
     return { success: true };
   } catch (error) {
-    console.error(`[Composio] Error disconnecting ${platform}:`, error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Disconnection failed",

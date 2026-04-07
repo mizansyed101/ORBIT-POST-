@@ -3,6 +3,12 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { initiateConnection, isConnected, COMPOSIO_APP_MAP } from "@/lib/composio";
 import { APP_URL } from "@/lib/env";
 
+/**
+ * [NETLIFY PULSE] Connection API invoked.
+ * This log ensures the function starts before any logic execution.
+ */
+console.log("[PULSE] api/connect/[platform] initiated");
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ platform: string }> }
