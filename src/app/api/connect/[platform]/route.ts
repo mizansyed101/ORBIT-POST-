@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { initiateConnection, isConnected, COMPOSIO_APP_MAP } from "@/lib/composio";
+import { APP_URL } from "@/lib/env";
 
 export async function POST(
   request: Request,
@@ -32,13 +33,11 @@ export async function POST(
       });
     }
 
-    // Initiate new connection
-    // Grab origin from request url to build a redirectUri
-    const origin = new URL(request.url).origin;
+    // Initiate new connection using the canonical APP_URL
     const { redirectUrl, connectionId } = await initiateConnection(
       platform, 
       user.id, 
-      `${origin}/settings`
+      `${APP_URL}/settings`
     );
 
     console.log(`[API] Connection initiated: ${connectionId}, Redirect: ${redirectUrl}`);
