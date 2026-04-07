@@ -52,6 +52,17 @@ export default function DashboardPage() {
       if (selectedPost?.id === postId) {
         setSelectedPost({ ...selectedPost, ...updates });
       }
+
+      // Automatically trigger the publisher if a post is approved.
+      // If it's already due, it will immediately post and we refresh the state.
+      if (updates.status === "approved") {
+        try {
+          await fetch("/api/posts/publish", { method: "POST" });
+          await fetchPosts();
+        } catch (err) {
+          console.error("Auto-publish trigger failed", err);
+        }
+      }
     }
   };
 

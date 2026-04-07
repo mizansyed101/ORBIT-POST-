@@ -127,6 +127,15 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
     const ids = pendingPosts.map((p) => p.id);
     await supabase.from("posts").update({ status: "approved" }).in("id", ids);
     setPosts((prev) => prev.map((p) => (ids.includes(p.id) ? { ...p, status: "approved" } : p)));
+    
+    // Automatically trigger the publisher
+    try {
+      await fetch("/api/posts/publish", { method: "POST" });
+      await refreshPosts();
+    } catch (err) {
+      console.error("Auto-publish trigger failed", err);
+    }
+    
     setBulkApproving(false);
   };
 
@@ -134,6 +143,15 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
     await supabase.from("posts").update(updates).eq("id", postId);
     setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, ...updates } : p)));
     if (selectedPost?.id === postId) setSelectedPost({ ...selectedPost, ...updates });
+    
+    if (updates.status === "approved") {
+      try {
+        await fetch("/api/posts/publish", { method: "POST" });
+        await refreshPosts();
+      } catch (err) {
+        console.error("Auto-publish trigger failed", err);
+      }
+    }
   };
 
   const refreshPosts = async () => {
