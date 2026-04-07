@@ -108,3 +108,48 @@ export async function GET(
     );
   }
 }
+
+/**
+ * DELETE: Disconnect a platform
+ */
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ platform: string }> }
+) {
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { platform } = await params;
+    
+    // 1. Perform the disconnection in Composio
+    const { disconnectPlatform } = await import("@/lib/composio");
+    const result = await disconnectPlatform(platform, user.id);
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error || "Failed to disconnect from platform" },
+        { status: 500 }
+      );
+    }
+
+    // 2. Clear the local record in connected_accounts
+    const { error: deleteError } = await supabase
+      .from("connected_accounts")
+      .delete()
+      .match({ user_id: user.id, platform });
+
+    if (deleteError) {
+      console.warn(`[API] Local record deletion error for ${platform}:`, deleteError);
+    }
+
+    return NextResponse.json({ success: true, platform });
+  } catch (error) {
+    console.error("Disconnection error:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Disconnection failed" },
+      { status: 500 }
+    );
+  }
+}

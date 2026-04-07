@@ -189,3 +189,45 @@ export async function executePost(
     };
   }
 }
+
+/**
+ * Disconnect a social platform for a user.
+ */
+export async function disconnectPlatform(
+  platform: string,
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const composio = getComposioClient();
+    const entity = composio.getEntity(userId);
+    const connections = await entity.getConnections();
+    
+    let appName = COMPOSIO_APP_MAP[platform];
+    const threadsSlugs = ["threads", "threads_net", "threads.net", "instagram_threads"];
+
+    // Find the connection for this platform
+    const connection = connections.find((c: any) => {
+      if (platform === "threads") {
+        return threadsSlugs.includes(c.appName) && c.status === "ACTIVE";
+      }
+      return c.appName === appName && c.status === "ACTIVE";
+    });
+
+    if (!connection) {
+      return { success: false, error: "No active connection found for this platform" };
+    }
+
+    console.log(`[Composio] Disconnecting ${platform} (ID: ${(connection as any).id || (connection as any).connectedAccountId})`);
+    
+    // Use the confirmed SDK method
+    await (composio as any).connectedAccounts.delete((connection as any).id || (connection as any).connectedAccountId);
+
+    return { success: true };
+  } catch (error) {
+    console.error(`[Composio] Error disconnecting ${platform}:`, error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Disconnection failed",
+    };
+  }
+}

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/Input";
 import { Card, CardContent } from "@/components/ui/Card";
 import { PlatformIcon } from "@/components/ui/PlatformIcon";
 import { cn, PLATFORM_LABELS } from "@/lib/utils";
-import { User, Key, Bell, CheckCircle, AlertCircle, Loader2, ExternalLink } from "lucide-react";
+import { User, Key, Bell, CheckCircle, AlertCircle, Loader2, ExternalLink, XCircle } from "lucide-react";
 import type { Platform, Profile } from "@/lib/types";
 
 const PLATFORMS: Platform[] = ["twitter", "linkedin", "instagram", "facebook", "threads"];
@@ -177,6 +177,31 @@ export default function SettingsPage() {
     }
   };
 
+  const handleDisconnectPlatform = async (platform: Platform) => {
+    if (
+      !confirm(
+        `Are you sure you want to disconnect ${PLATFORM_LABELS[platform]}? You will need to re-authorize it to post again.`
+      )
+    ) {
+      return;
+    }
+
+    setConnectionStatuses((prev) => ({ ...prev, [platform]: "loading" }));
+    try {
+      const res = await fetch(`/api/connect/${platform}`, { method: "DELETE" });
+      if (res.ok) {
+        setConnectionStatuses((prev) => ({ ...prev, [platform]: "disconnected" }));
+      } else {
+        const data = await res.json();
+        console.error("Failed to disconnect:", data.error);
+        fetchConnectionStatuses(); // Refresh to get correct state
+      }
+    } catch (error) {
+      console.error("Disconnection error:", error);
+      fetchConnectionStatuses();
+    }
+  };
+
   const tabs = [
     { key: "profile" as const, label: "Profile", icon: User },
     { key: "integrations" as const, label: "Integrations", icon: Key },
@@ -300,6 +325,19 @@ export default function SettingsPage() {
                         )}
                         {status === "connected" ? "Reconnect" : "Connect"}
                       </Button>
+                      
+                      {status === "connected" && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-peach hover:text-peach-hover hover:bg-peach/10"
+                          onClick={() => handleDisconnectPlatform(p)}
+                          // status is "connected" here, so it's not "loading"
+                        >
+                          <XCircle size={12} />
+                          Disconnect
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
