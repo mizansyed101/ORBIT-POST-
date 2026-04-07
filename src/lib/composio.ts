@@ -219,8 +219,10 @@ export async function disconnectPlatform(
 
     console.log(`[Composio] Disconnecting ${platform} (ID: ${(connection as any).id || (connection as any).connectedAccountId})`);
     
-    // Use the confirmed SDK method
-    await (composio as any).connectedAccounts.delete((connection as any).id || (connection as any).connectedAccountId);
+    // Use the confirmed SDK method which expects an object
+    await (composio as any).connectedAccounts.delete({ 
+      connectedAccountId: (connection as any).id || (connection as any).connectedAccountId 
+    });
 
     return { success: true };
   } catch (error) {
