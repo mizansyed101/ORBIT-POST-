@@ -8,6 +8,5 @@
 [functions]
   directory = "netlify/functions"
 
-[[functions.schedule]]
-  function = "publish-scheduler"
+[functions."publish-scheduler"]
   schedule = "*/15 * * * *"
