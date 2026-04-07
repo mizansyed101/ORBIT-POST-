@@ -1,26 +1,194 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* ── Core Palette ── */
+  --obsidian: #0A0A0F;
+  --obsidian-raised: #12121A;
+  --obsidian-hover: #1A1A25;
+  --obsidian-border: #2A2A3A;
+  --indigo: #5B5EFF;
+  --indigo-hover: #7072FF;
+  --indigo-glow: rgba(91, 94, 255, 0.2);
+  --mint: #00FFB2;
+  --mint-dim: #00CC8E;
+  --mint-glow: rgba(0, 255, 178, 0.15);
+  --cream: #F5F0E8;
+  --cream-muted: rgba(245, 240, 232, 0.5);
+  --cream-faint: rgba(245, 240, 232, 0.25);
+  --error: #FF4D6A;
+  --error-glow: rgba(255, 77, 106, 0.15);
+  --warning: #FFB84D;
+  --warning-glow: rgba(255, 184, 77, 0.15);
+  --info: #4DA6FF;
+
+  /* ── Surfaces ── */
+  --background: var(--obsidian);
+  --foreground: var(--cream);
+  --surface: var(--obsidian-raised);
+  --surface-hover: var(--obsidian-hover);
+  --border: var(--obsidian-border);
+
+  /* ── Layout ── */
+  --sidebar-collapsed: 64px;
+  --sidebar-expanded: 220px;
+  --topbar-height: 56px;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-obsidian: var(--obsidian);
+  --color-obsidian-raised: var(--obsidian-raised);
+  --color-obsidian-hover: var(--obsidian-hover);
+  --color-obsidian-border: var(--obsidian-border);
+  --color-indigo: var(--indigo);
+  --color-indigo-hover: var(--indigo-hover);
+  --color-indigo-glow: var(--indigo-glow);
+  --color-mint: var(--mint);
+  --color-mint-dim: var(--mint-dim);
+  --color-mint-glow: var(--mint-glow);
+  --color-cream: var(--cream);
+  --color-cream-muted: var(--cream-muted);
+  --color-cream-faint: var(--cream-faint);
+  --color-error: var(--error);
+  --color-error-glow: var(--error-glow);
+  --color-warning: var(--warning);
+  --color-warning-glow: var(--warning-glow);
+  --color-info: var(--info);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-playfair);
+
+  --animate-shimmer: shimmer 2s ease-in-out infinite;
+  --animate-pulse-mint: pulse-mint 2s ease-in-out infinite;
+  --animate-pulse-indigo: pulse-indigo 2s ease-in-out infinite;
+  --animate-slide-in-right: slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-in-up: slide-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-fade-in: fade-in 0.3s ease-out;
+  --animate-stagger: fade-in 0.5s ease-out both;
+  --animate-scale-in: scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ── Animations ── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pulse-mint {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 255, 178, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(0, 255, 178, 0); }
+}
+
+@keyframes pulse-indigo {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(91, 94, 255, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(91, 94, 255, 0); }
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slide-in-up {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* ── Base Styles ── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--obsidian-border) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--obsidian-border);
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--cream-faint);
+}
+
+::selection {
+  background: var(--indigo);
+  color: white;
+}
+
+html {
+  background: var(--obsidian);
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--obsidian);
+  color: var(--cream);
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Stagger Utility ── */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+.stagger-5 { animation-delay: 0.25s; }
+.stagger-6 { animation-delay: 0.3s; }
+.stagger-7 { animation-delay: 0.35s; }
+.stagger-8 { animation-delay: 0.4s; }
+
+/* ── Glassmorphism ── */
+.glass {
+  background: rgba(18, 18, 26, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--obsidian-border);
+}
+
+/* ── Glow Effects ── */
+.glow-indigo {
+  box-shadow: 0 0 20px var(--indigo-glow), 0 0 60px rgba(91, 94, 255, 0.08);
+}
+
+.glow-mint {
+  box-shadow: 0 0 20px var(--mint-glow), 0 0 60px rgba(0, 255, 178, 0.06);
+}
+
+/* ── Focus Ring ── */
+.focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--obsidian), 0 0 0 4px var(--indigo);
+}
+
+/* ── Input autofill styles ── */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--cream);
+  -webkit-box-shadow: 0 0 0px 1000px var(--obsidian-raised) inset;
+  transition: background-color 5000s ease-in-out 0s;
 }
