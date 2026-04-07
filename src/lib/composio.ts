@@ -17,6 +17,7 @@ export function getComposioClient(): Composio {
 // Map our platform names to Composio app names
 export const COMPOSIO_APP_MAP: Record<string, string> = {
   twitter: "twitter",
+  x: "twitter", // Fallback for the "X" rebrand
   linkedin: "linkedin",
   instagram: "instagram",
   facebook: "facebook",
@@ -91,16 +92,19 @@ export async function initiateConnection(
     const connectionRequest = await entity.initiateConnection({ 
       appName, 
       redirectUri: redirectUrl,
-      config: {
-        redirectUrl: redirectUrl
-      }
     });
     
     console.log(`[Composio] Connection initiated successfully for ${appName}:`, JSON.stringify(connectionRequest, null, 2));
 
+    // Extract URL robustly — some SDK versions use 'url', others use 'redirectUrl'
+    const finalRedirectUrl = (connectionRequest as any).redirectUrl || 
+                            (connectionRequest as any).url || 
+                            (connectionRequest as any).redirect_url || 
+                            "";
+
     return {
-      redirectUrl: connectionRequest.redirectUrl || "",
-      connectionId: connectionRequest.connectedAccountId || "",
+      redirectUrl: finalRedirectUrl,
+      connectionId: (connectionRequest as any).connectedAccountId || (connectionRequest as any).connectionId || "",
     };
   } catch (err) {
     console.error(`[Composio] Final error initiating connection for ${platform}:`, err);

@@ -35,9 +35,11 @@ export async function POST(
     // Initiate new connection
     // Grab origin from request url to build a redirectUri
     const origin = new URL(request.url).origin;
-    console.log(`[API] Initiating connection for ${platform} for user ${user.id}`);
-    
-    const { redirectUrl, connectionId } = await initiateConnection(platform, user.id, `${origin}/dashboard/settings`);
+    const { redirectUrl, connectionId } = await initiateConnection(
+      platform, 
+      user.id, 
+      `${origin}/settings`
+    );
 
     console.log(`[API] Connection initiated: ${connectionId}, Redirect: ${redirectUrl}`);
 
