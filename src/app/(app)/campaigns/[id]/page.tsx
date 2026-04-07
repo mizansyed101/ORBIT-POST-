@@ -200,7 +200,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
               <CardContent className="text-center py-20 text-cream-faint">
                 <Loader2 size={32} className="opacity-10 animate-spin mx-auto mb-4" />
                 <p className="text-sm font-medium">Your campaign is ready. Let's create some content!</p>
-                <Button size="sm" variant="outline" className="mt-4" onClick={handleGenerate}>First Generation →</Button>
+                <Button size="sm" variant="secondary" className="mt-4" onClick={handleGenerate}>First Generation →</Button>
               </CardContent>
             </Card>
           ) : (
