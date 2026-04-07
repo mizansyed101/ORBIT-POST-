@@ -35,6 +35,71 @@ export const COMPOSIO_POST_TOOL_MAP: Record<string, string> = {
 };
 
 /**
+ * Ensure an integration exists for the given platform.
+ * If not, it creates a managed integration automatically.
+ */
+async function ensureIntegrationExists(appName: string): Promise<void> {
+  try {
+    const appsRes = await fetch("https://backend.composio.dev/api/v1/apps", {
+      headers: { "x-api-key": COMPOSIO_API_KEY }
+    });
+    
+    if (!appsRes.ok) {
+        console.error(`[Composio] Failed to fetch apps: ${appsRes.status}`);
+        return;
+    }
+    
+    const appsData = await appsRes.json();
+    const targetApp = appsData.items?.find((a: any) => a.key === appName);
+    
+    if (!targetApp) {
+        console.error(`[Composio] App with key '${appName}' not found in registry.`);
+        return;
+    }
+
+    // List existing integrations (connectors)
+    const integrationsRes = await fetch("https://backend.composio.dev/api/v1/connectors", {
+      headers: { "x-api-key": COMPOSIO_API_KEY }
+    });
+    
+    if (!integrationsRes.ok) {
+        console.error(`[Composio] Failed to fetch connectors: ${integrationsRes.status}`);
+        return;
+    }
+    
+    const integrationsData = await integrationsRes.json();
+    const integrations = integrationsData.items || [];
+    
+    const exists = integrations.some((i: any) => i.appName === appName);
+    if (!exists) {
+        console.log(`[Composio] No integration found for ${appName}. Creating managed integration...`);
+        const createRes = await fetch("https://backend.composio.dev/api/v2/appConnector/createConnector", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-api-key": COMPOSIO_API_KEY
+            },
+            body: JSON.stringify({
+                app: { uniqueKey: appName },
+                config: {
+                    name: `${appName.charAt(0).toUpperCase() + appName.slice(1)} Managed`,
+                    useComposioAuth: true
+                }
+            })
+        });
+
+        if (createRes.ok) {
+            console.log(`[Composio] Successfully created managed integration for ${appName}`);
+        } else {
+            console.error(`[Composio] Failed to create integration: ${createRes.status}`);
+        }
+    }
+  } catch (error) {
+    console.error(`[Composio] Error in ensureIntegrationExists for ${appName}:`, error);
+  }
+}
+
+/**
  * Initiate a connection for a user and platform.
  * Returns an authorization URL for OAuth.
  */
@@ -50,6 +115,9 @@ export async function initiateConnection(
   }
 
   const entity = composio.getEntity(userId);
+  
+  // Ensure the integration exists before proceeding
+  await ensureIntegrationExists(appName);
   
   // Potential app slugs for Threads.net (Composio updates these often)
   const threadsSlugs = ["threads", "threads_net", "threads.net", "instagram_threads"];
@@ -89,22 +157,47 @@ export async function initiateConnection(
       throw lastError; // Re-throw the last error if all slugs failed
     }
 
-    const connectionRequest = await entity.initiateConnection({ 
-      appName, 
-      redirectUri: redirectUrl,
+    // Use direct API for initiation to ensure 'initiateData' is passed correctly
+    // This bypasses SDK limitations where a missing mandatory field causes a 400 error.
+    const initiationPayload = {
+      app: { uniqueKey: appName },
+      config: {
+        name: appName,
+        redirectURL: redirectUrl
+      },
+      connection: {
+        entityId: userId,
+        initiateData: {}
+      }
+    };
+
+    const initiationRes = await fetch("https://backend.composio.dev/api/v2/connectedAccounts/initiateConnection", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": COMPOSIO_API_KEY
+      },
+      body: JSON.stringify(initiationPayload)
     });
-    
+
+    if (!initiationRes.ok) {
+      const errorData = await initiationRes.json();
+      console.error(`[Composio] Backend initiation error:`, JSON.stringify(errorData, null, 2));
+      throw new Error(`Composio initiation failed with status ${initiationRes.status}`);
+    }
+
+    const connectionRequest = await initiationRes.json();
     console.log(`[Composio] Connection initiated successfully for ${appName}:`, JSON.stringify(connectionRequest, null, 2));
 
-    // Extract URL robustly — some SDK versions use 'url', others use 'redirectUrl'
-    const finalRedirectUrl = (connectionRequest as any).redirectUrl || 
-                            (connectionRequest as any).url || 
-                            (connectionRequest as any).redirect_url || 
+    // Extract URL robustly — backend returns 'redirectUrl'
+    const finalRedirectUrl = connectionRequest.redirectUrl || 
+                            connectionRequest.url || 
+                            connectionRequest.redirect_url || 
                             "";
 
     return {
       redirectUrl: finalRedirectUrl,
-      connectionId: (connectionRequest as any).connectedAccountId || (connectionRequest as any).connectionId || "",
+      connectionId: connectionRequest.connectedAccountId || connectionRequest.connectionId || "",
     };
   } catch (err) {
     console.error(`[Composio] Final error initiating connection for ${platform}:`, err);
