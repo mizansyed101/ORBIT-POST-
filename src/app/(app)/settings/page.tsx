@@ -120,26 +120,38 @@ export default function SettingsPage() {
   };
 
   const handleConnectPlatform = async (platform: Platform) => {
+    console.log(`[Connect] Initiating ${platform} connection...`);
     // Open a blank window synchronously to bypass pop-up blockers
     const authWindow = window.open("", "_blank", "width=600,height=700,menubar=no,toolbar=no");
     
     setConnectionStatuses((prev) => ({ ...prev, [platform]: "loading" }));
     try {
+      console.log(`[Connect] Calling /api/connect/${platform}...`);
       const res = await fetch(`/api/connect/${platform}`, { method: "POST" });
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error(`[Connect] API Error (${res.status}):`, errorText);
+        throw new Error(`Failed to initiate ${platform} connection: ${res.status}`);
+      }
+      
       const data = await res.json();
+      console.log(`[Connect] Result:`, JSON.stringify(data, null, 2));
 
       if (data.already_connected) {
+        console.log(`[Connect] Already connected to ${platform}. Closing window.`);
         setConnectionStatuses((prev) => ({ ...prev, [platform]: "connected" }));
         if (authWindow) authWindow.close();
         return;
       }
 
       if (data.redirectUrl) {
+        console.log(`[Connect] Setting auth window location: ${data.redirectUrl}`);
         // Set the actual OAuth URL into the opened window
         if (authWindow) {
           authWindow.location.href = data.redirectUrl;
         } else {
-          // Fallback if strictly blocked
+          console.warn(`[Connect] authWindow was blocked or null, using local fallback.`);
           window.location.href = data.redirectUrl;
           return;
         }
@@ -150,17 +162,19 @@ export default function SettingsPage() {
             const statusRes = await fetch(`/api/connect/${platform}`);
             const statusData = await statusRes.json();
             if (statusData.connected) {
+              console.log(`[Connect] ${platform} connection established via poll.`);
               clearInterval(pollInterval);
               setConnectionStatuses((prev) => ({ ...prev, [platform]: "connected" }));
               if (authWindow && !authWindow.closed) authWindow.close();
             }
-          } catch {
-            // Keep polling
+          } catch (err) {
+            console.error(`[Connect] Poll error for ${platform}:`, err);
           }
         }, 3000);
 
         // Stop polling after 2 minutes
         setTimeout(() => {
+          console.log(`[Connect] Polling timeout for ${platform}.`);
           clearInterval(pollInterval);
           setConnectionStatuses((prev) => ({
             ...prev,
@@ -168,10 +182,12 @@ export default function SettingsPage() {
           }));
         }, 120000);
       } else {
+        console.error(`[Connect] No redirectUrl returned for ${platform}.`);
         if (authWindow) authWindow.close();
         setConnectionStatuses((prev) => ({ ...prev, [platform]: "disconnected" }));
       }
-    } catch {
+    } catch (err) {
+      console.error(`[Connect] Exception for ${platform}:`, err);
       if (authWindow) authWindow.close();
       setConnectionStatuses((prev) => ({ ...prev, [platform]: "disconnected" }));
     }
